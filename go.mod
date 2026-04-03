@@ -3,6 +3,7 @@ module github.com/Qwertymart/USDT_rates
 go 1.26.1
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.9.1
 	github.com/pressly/goose/v3 v3.27.0
