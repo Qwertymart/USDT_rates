@@ -30,3 +30,7 @@ func Init(level, format string) (*zap.Logger, error) {
 
 	return logger, nil
 }
+
+func Err(err error) zap.Field {
+	return zap.Error(err)
+}

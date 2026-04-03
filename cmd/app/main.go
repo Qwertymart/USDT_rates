@@ -5,11 +5,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
+	"github.com/Qwertymart/USDT_rates/internal/app"
 	"github.com/Qwertymart/USDT_rates/internal/config"
 	"github.com/Qwertymart/USDT_rates/internal/logger"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -23,30 +22,25 @@ func main() {
 	}
 	defer l.Sync()
 
-	l.Info("config loaded", zap.String("port", cfg.GRPCPort))
-
-	// Context for graceful shutdown
+	// Application context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// TODO: Initialize DB
-	// TODO: Initialize GRPC Server
+	// Initialize application
+	application, err := app.New(ctx, cfg, l)
+	if err != nil {
+		l.Fatal("failed to initialize application", logger.Err(err))
+	}
+
+	// Run gRPC server in a separate goroutine
+	go application.MustRun()
 
 	// Wait for interrupt signal
 	<-ctx.Done()
 	l.Info("shutting down gracefully...")
 
-	// Perform cleanup with timeout
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// TODO: Close DB and Stop GRPC Server using shutdownCtx
-	go func() {
-		<-shutdownCtx.Done()
-		if shutdownCtx.Err() == context.DeadlineExceeded {
-			l.Fatal("graceful shutdown timed out.. forcing exit")
-		}
-	}()
+	// Perform cleanup
+	application.Stop()
 
 	l.Info("application stopped")
 }
