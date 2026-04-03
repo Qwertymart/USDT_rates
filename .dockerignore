@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# Go
+bin/
+vendor/
+*_test.go
+*.out
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+
+# Docker
+Dockerfile
+docker-compose.yml
+
+# Project
+README.md
+Tech_task.md
+Makefile

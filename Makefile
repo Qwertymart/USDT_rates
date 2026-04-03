@@ -1,6 +1,6 @@
 .PHONY: build test docker-build run lint generate clean
 
-APP_NAME := usdt-rates
+APP_NAME := app
 BIN_DIR := bin
 
 build:

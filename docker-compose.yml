@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rates
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rates"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DB_DSN=postgres://postgres:postgres@db:5432/rates?sslmode=disable
+      - GRPC_PORT=50051
+      - EXCHANGE_URL=https://grinex.io
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    ports:
+      - "50051:50051"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
