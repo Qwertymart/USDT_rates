@@ -27,6 +27,7 @@ services:
       - LOG_FORMAT=json
     ports:
       - "50051:50051"
+      - "9090:9090"
     depends_on:
       db:
         condition: service_healthy

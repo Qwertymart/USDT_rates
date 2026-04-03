@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/Qwertymart/USDT_rates/internal/config"
@@ -13,6 +14,13 @@ import (
 	"github.com/Qwertymart/USDT_rates/internal/repository/postgres"
 	"github.com/Qwertymart/USDT_rates/internal/service"
 	"github.com/jackc/pgx/v5/pgxpool"
+	prommetrics "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -20,10 +28,24 @@ import (
 )
 
 type App struct {
-	gRPCServer *grpc.Server
-	pool       *pgxpool.Pool
-	logger     *zap.Logger
-	port       string
+	gRPCServer    *grpc.Server
+	metricsServer *http.Server
+	pool          *pgxpool.Pool
+	logger        *zap.Logger
+	port          string
+}
+
+// initTracer creates a stdout tracer for demonstration
+func initTracer() *sdktrace.TracerProvider {
+	exporter, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
+	if err != nil {
+		panic(err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	return tp
 }
 
 func New(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*App, error) {
@@ -52,8 +74,21 @@ func New(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*App, err
 	market := "usdtrub" // Should ideally be in config
 	ratesSvc := service.New(exClient, repo, logger, market)
 
-	// 4. Create gRPC server
-	gRPCServer := grpc.NewServer()
+	// Init OpenTelemetry Tracer
+	tp := initTracer()
+	_ = tp // in production, we should close it gracefully
+
+	// Init Prometheus Metrics
+	srvMetrics := prommetrics.NewServerMetrics()
+	prometheus.MustRegister(srvMetrics)
+
+	// Create gRPC server with tracing and metrics interceptors
+	gRPCServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(srvMetrics.UnaryServerInterceptor()),
+		grpc.ChainStreamInterceptor(srvMetrics.StreamServerInterceptor()),
+	)
+	
 	ratesgrpc.Register(gRPCServer, ratesSvc)
 
 	// Register standard health check service
@@ -61,11 +96,19 @@ func New(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*App, err
 	healthpb.RegisterHealthServer(gRPCServer, healthcheck)
 	healthcheck.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
+	srvMetrics.InitializeMetrics(gRPCServer)
+
+	// Setup Prometheus HTTP server
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	metricsServer := &http.Server{Addr: ":9090", Handler: mux}
+
 	return &App{
-		gRPCServer: gRPCServer,
-		pool:       pool,
-		logger:     logger,
-		port:       cfg.GRPCPort,
+		gRPCServer:    gRPCServer,
+		metricsServer: metricsServer,
+		pool:          pool,
+		logger:        logger,
+		port:          cfg.GRPCPort,
 	}, nil
 }
 
@@ -81,6 +124,14 @@ func (a *App) Run() error {
 		return fmt.Errorf("failed to listen on port %s: %w", a.port, err)
 	}
 
+	// Start metrics server
+	go func() {
+		a.logger.Info("prometheus metrics server is running on :9090/metrics")
+		if err := a.metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			a.logger.Error("metrics server failed", zap.Error(err))
+		}
+	}()
+
 	a.logger.Info("gRPC server is running", zap.String("addr", l.Addr().String()))
 
 	if err := a.gRPCServer.Serve(l); err != nil {
@@ -91,8 +142,12 @@ func (a *App) Run() error {
 }
 
 func (a *App) Stop() {
-	a.logger.Info("stopping gRPC server...")
+	a.logger.Info("stopping gRPC and metrics servers...")
 	a.gRPCServer.GracefulStop()
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = a.metricsServer.Shutdown(ctx)
 	
 	if a.pool != nil {
 		a.pool.Close()

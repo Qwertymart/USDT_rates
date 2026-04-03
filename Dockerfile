@@ -20,6 +20,6 @@ WORKDIR /root/
 COPY --from=builder /app/bin/app .
 COPY --from=builder /app/migrations ./migrations
 
-EXPOSE 50051
+EXPOSE 50051 9090
 
 CMD ["./app"]
