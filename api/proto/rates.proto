@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package rates.v1;
+
+option go_package = "github.com/Qwertymart/usdt_rates/pkg/api/rates/v1;ratesv1";
+
+import "google/protobuf/timestamp.proto"; // Standard timestamp type
+
+// RatesService provides methods for working with currency rates
+service RatesService {
+  // GetRates returns the current USDT rate
+  rpc GetRates(GetRatesRequest) returns (GetRatesResponse);
+}
+
+// GetRatesRequest is an empty message for the GetRates RPC.
+message GetRatesRequest {}
+
+message GetRatesResponse {
+  string ask = 1; // Selling price
+  string bid = 2; // Buying price
+  google.protobuf.Timestamp timestamp = 3;
+}
