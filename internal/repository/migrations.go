@@ -14,7 +14,7 @@ func RunMigrations(dsn string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Setup dialect
 	if err := goose.SetDialect("postgres"); err != nil {

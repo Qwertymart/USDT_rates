@@ -20,7 +20,7 @@ func main() {
 	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	defer l.Sync()
+	defer func() { _ = l.Sync() }()
 
 	// Application context
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

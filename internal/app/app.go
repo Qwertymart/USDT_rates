@@ -15,6 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 type App struct {
@@ -50,9 +52,14 @@ func New(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*App, err
 	market := "usdtrub" // Should ideally be in config
 	ratesSvc := service.New(exClient, repo, logger, market)
 
-	// Create gRPC server
+	// 4. Create gRPC server
 	gRPCServer := grpc.NewServer()
 	ratesgrpc.Register(gRPCServer, ratesSvc)
+
+	// Register standard health check service
+	healthcheck := health.NewServer()
+	healthpb.RegisterHealthServer(gRPCServer, healthcheck)
+	healthcheck.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
 	return &App{
 		gRPCServer: gRPCServer,

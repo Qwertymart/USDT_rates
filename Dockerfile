@@ -9,7 +9,7 @@ RUN go mod download
 
 COPY . .
 
-RUN make build
+RUN CGO_ENABLED=0 GOOS=linux make build
 
 FROM alpine:latest
 
