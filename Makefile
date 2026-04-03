@@ -5,7 +5,7 @@ BIN_DIR := bin
 
 build:
 	@echo "Building application..."
-	go build -o $(BIN_DIR)/$(APP_NAME) cmd/app/main.go
+	CGO_ENABLED=0 GOOS=linux go build -o $(BIN_DIR)/$(APP_NAME) cmd/app/main.go
 
 test:
 	@echo "Running tests..."

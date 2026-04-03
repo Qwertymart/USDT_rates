@@ -23,9 +23,12 @@ func MustLoad() *Config {
 	port := flag.String("port", "", "grpc server port")
 	flag.Parse()
 
-	// Load from env
+	// Load from env file if exists
 	if err := cleanenv.ReadConfig(".env", &cfg); err != nil {
-		// If .env is missing we use system env or defaults
+		// Fallback to system env and defaults if .env is missing
+		if errEnv := cleanenv.ReadEnv(&cfg); errEnv != nil {
+			panic("failed to load config: " + errEnv.Error())
+		}
 	}
 
 	// Override with flags if provided

@@ -47,7 +47,7 @@ func New(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*App, err
 	repo := postgres.NewRatesRepo(pool)
 	exClient := exchange.NewClient(cfg.ExchangeURL, 10*time.Second)
 	
-	market := "usdtru rub" // Should ideally be in config
+	market := "usdtrub" // Should ideally be in config
 	ratesSvc := service.New(exClient, repo, logger, market)
 
 	// Create gRPC server

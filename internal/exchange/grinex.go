@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/cookiejar"
 	"time"
 )
 
@@ -17,19 +18,28 @@ type Client struct {
 	httpClient *http.Client
 }
 
+type Order struct {
+	Price  string `json:"price"`
+	Volume string `json:"volume"`
+}
+
 type DepthResponse struct {
-	Asks [][]string `json:"asks"`
-	Bids [][]string `json:"bids"`
+	Asks []Order `json:"asks"`
+	Bids []Order `json:"bids"`
 }
 
 func NewClient(url string, timeout time.Duration) *Client {
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
+	
+	jar, _ := cookiejar.New(nil)
+	
 	return &Client{
 		baseURL: url,
 		httpClient: &http.Client{
 			Timeout: timeout,
+			Jar:     jar,
 		},
 	}
 }
@@ -42,6 +52,9 @@ func (c *Client) GetRates(ctx context.Context, market string) (ask, bid string, 
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create request: %w", err)
 	}
+
+	// Add User-Agent to prevent 403 Forbidden by anti-bot systems
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -58,9 +71,19 @@ func (c *Client) GetRates(ctx context.Context, market string) (ask, bid string, 
 		return "", "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	if len(data.Asks) == 0 || len(data.Bids) == 0 {
-		return "", "", fmt.Errorf("empty orderbook for market %s", market)
+	askPrice := "0"
+	if len(data.Asks) > 0 {
+		askPrice = data.Asks[0].Price
 	}
 
-	return data.Asks[0][0], data.Bids[0][0], nil
+	bidPrice := "0"
+	if len(data.Bids) > 0 {
+		bidPrice = data.Bids[0].Price
+	}
+
+	if askPrice == "0" && bidPrice == "0" {
+		return "", "", fmt.Errorf("orderbook is completely empty for market %s", market)
+	}
+
+	return askPrice, bidPrice, nil
 }
